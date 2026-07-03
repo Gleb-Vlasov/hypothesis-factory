@@ -48,6 +48,9 @@ async def analyze(file: UploadFile = File(...), goal: str = Form("")):
     name = file.filename or "upload.xlsx"
     if not name.lower().endswith(ALLOWED_EXT):
         raise HTTPException(status_code=400, detail="Ожидается файл Excel (.xlsx) с балансом хвостов.")
+    if name.lower().endswith(".xls"):
+        raise HTTPException(status_code=400, detail="Старый формат .xls не поддерживается — "
+                            "пересохраните файл как .xlsx (Excel: «Сохранить как» → «Книга Excel»).")
     data = await file.read()
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(name)[1])
     try:

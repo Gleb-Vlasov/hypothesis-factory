@@ -140,11 +140,40 @@ def _label(row: list) -> str:
 
 
 def parse_tailings_report(path: str, sheet: str = "Итог") -> TailingsReport:
+    """Разбирает баланс хвостов. Устойчив к вариациям структуры книги:
+    приоритет у листа `sheet`, но если данных на нём нет — перебираются ВСЕ
+    листы, берётся тот, где распознано больше всего (потоки × классы)."""
     wb = openpyxl.load_workbook(path, data_only=True)
-    ws = wb[sheet] if sheet in wb.sheetnames else wb.active
-    rows = [[c.value for c in r] for r in ws.iter_rows()]
+    names = ([sheet] if sheet in wb.sheetnames else []) \
+        + [n for n in wb.sheetnames if n != sheet]
 
-    report = TailingsReport(source_file=path)
+    best: Optional[TailingsReport] = None
+    best_name, best_score = "", -1
+    for name in names:
+        rows = [[c.value for c in r] for r in wb[name].iter_rows()]
+        rep = _parse_rows(rows, source_file=path)
+        score = sum(len(s.classes) for s in rep.streams) * 10 \
+            + len(rep.streams) + (1 if rep.tails_smt is not None else 0)
+        if score > best_score:
+            best, best_name, best_score = rep, name, score
+        if best_score > 0 and name == sheet:
+            break  # предпочтительный лист дал данные — дальше не ищем
+
+    assert best is not None
+    if best_score <= 0:
+        raise ValueError(
+            "Не удалось распознать баланс хвостов ни на одном листе книги: "
+            "не найдены маркеры («Хвосты …», «Класс крупности», классы, «доля потерь»). "
+            f"Листы в файле: {', '.join(wb.sheetnames)}. Ожидается отчёт института по хвостам.")
+    if best_name != sheet:
+        best.warnings.insert(0, f"Данные распознаны на листе «{best_name}» (лист «{sheet}» не найден или пуст).")
+    _validate(best)
+    return best
+
+
+def _parse_rows(rows: list[list], source_file: str) -> TailingsReport:
+    n = len(rows)
+    report = TailingsReport(source_file=source_file)
     report.streams = []
 
     current_stream: Optional[TailingsStream] = None
@@ -155,7 +184,6 @@ def parse_tailings_report(path: str, sheet: str = "Итог") -> TailingsReport:
     pend_l28: Optional[float] = None
     pend_l29: Optional[float] = None
     i = 0
-    n = len(rows)
     feed_captured = False
 
     while i < n:
@@ -285,7 +313,6 @@ def parse_tailings_report(path: str, sheet: str = "Итог") -> TailingsReport:
 
         i += 1
 
-    _validate(report)
     return report
 
 

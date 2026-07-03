@@ -49,8 +49,8 @@ YANDEX_API_KEY=... YANDEX_FOLDER_ID=... docker compose up --build
 ### Запуск готового образа (без сборки)
 
 ```bash
-IMAGE=<registry>/<user>/hypofactory:latest \
-  docker compose -f docker-compose.deploy.yml up -d
+docker compose -f docker-compose.deploy.yml up -d
+# образ: ghcr.io/gleb-vlasov/hypofactory:latest (публичный, ~500 МБ, CPU-only)
 ```
 
 ## Локальный запуск (без Docker)

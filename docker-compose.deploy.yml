@@ -1,10 +1,10 @@
 # Запуск ГОТОВОГО образа из публичного реестра — без локальной сборки.
-# Использование:
-#   IMAGE=<registry>/<user>/hypofactory:latest docker compose -f docker-compose.deploy.yml up -d
-# Так у жюри выполняется docker pull, а не build (нет риска ошибок сборки).
+# Использование (достаточно положить рядом .env с ключами):
+#   docker compose -f docker-compose.deploy.yml up -d
+# Выполняется docker pull готового образа, а не build — риск ошибок сборки исключён.
 services:
   app:
-    image: ${IMAGE:?Укажите IMAGE=<registry>/<user>/hypofactory:latest}
+    image: ${IMAGE:-ghcr.io/gleb-vlasov/hypofactory:latest}
     pull_policy: always
     ports:
       - "${PORT:-8000}:8000"
@@ -13,6 +13,10 @@ services:
       YANDEX_FOLDER_ID: ${YANDEX_FOLDER_ID:-}
       LLM_MODEL_ID: ${LLM_MODEL_ID:-qwen3-235b-a22b-fp8}
       LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.2}
+      EMBEDDINGS_ENABLED: ${EMBEDDINGS_ENABLED:-true}
+      APP_ACCESS_KEY: ${APP_ACCESS_KEY:-}
+      METAL_PRICE_28_USD_T: ${METAL_PRICE_28_USD_T:-16500}
+      METAL_PRICE_29_USD_T: ${METAL_PRICE_29_USD_T:-9200}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health').getcode()==200 else 1)"]

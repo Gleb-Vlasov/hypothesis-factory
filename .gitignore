@@ -1,0 +1,44 @@
+# Local notes and working docs — not part of the project (README stays)
+/*.md
+!/README.md
+docs/
+
+# Provided competition data — NOT redistributed in public VCS (copyrighted textbooks, source data)
+DATA/
+INPUT/
+../DATA/
+../INPUT/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Node / frontend
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+*.key
+
+# Local artifacts
+scratchpad/
+*.log
+.DS_Store
+
+# Векторный индекс (embeddings.npy + ids.json, ~2.4 МБ) КОММИТИМ, как и corpus.jsonl:
+# семантический слой должен работать и при сборке из исходников.
+data_index/embeddings_partial.jsonl
+models_cache/
+
+# Пользовательские данные рантайма (загруженная литература, фидбэк)
+data_index/user_corpus.jsonl
+data_index/feedback.jsonl

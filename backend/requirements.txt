@@ -1,0 +1,27 @@
+# Runtime-зависимости образа (лёгкие: LLM — по API Yandex, GPU/torch не нужны).
+# Веб-фреймворк
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+python-multipart==0.0.20
+
+# Данные / ингест
+openpyxl==3.1.5
+pymupdf==1.25.1
+python-docx==1.1.2
+
+# RAG (лексический слой — всегда офлайн)
+rank-bm25==0.2.2
+numpy==2.2.1
+
+# LLM-клиент (OpenAI-совместимый; провайдер — Yandex AI Studio)
+openai==1.59.6
+
+# Экспорт отчётов
+reportlab==4.2.5
+
+# Утилиты
+python-dotenv==1.0.1
+
+# Семантический слой RAG (локальные эмбеддинги bge-m3) — ОПЦИОНАЛЬНО и тяжело
+# (тянет torch ~ГБ). По умолчанию не ставим; см. requirements-embed.txt.

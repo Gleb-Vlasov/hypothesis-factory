@@ -1,0 +1,27 @@
+# Python
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+.venv/
+venv/
+
+# Данные организаторов и рантайм-артефакты (в образ не нужны)
+# embeddings.npy/ids.json (~2.4 МБ) — НУЖНЫ: семантический слой RAG.
+DATA/
+INPUT/
+data_index/feedback.jsonl
+data_index/user_corpus.jsonl
+data_index/embeddings_partial.jsonl
+
+# Служебные файлы и заметки (в рантайме не нужны; README тоже не нужен в образе)
+*.md
+!data_index/facility_profile.md
+docs/
+tests/
+scripts/
+.git/
+.env
+backend/.env
+frontend/dist/
+scratchpad/
+*.log

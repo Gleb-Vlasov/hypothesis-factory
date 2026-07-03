@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Фабрика гипотез</title>
+  <link rel="stylesheet" href="styles.css?v=11" />
+</head>
+<body>
+  <!-- Инлайн-позиционирование дублирует CSS намеренно: фоновые слои не должны
+       ломать раскладку даже при устаревшем кэшированном styles.css -->
+  <div class="aurora" aria-hidden="true"
+       style="position:fixed;inset:0;z-index:-2;pointer-events:none;overflow:hidden"></div>
+  <canvas id="fx" aria-hidden="true"
+          style="position:fixed;inset:0;z-index:-1;pointer-events:none"></canvas>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">ФГ</div>
+      <div>
+        <h1>Фабрика гипотез</h1>
+        <p class="sub">Проверяемые гипотезы по снижению потерь металлов с хвостами обогащения</p>
+      </div>
+    </div>
+    <div id="statusBadge" class="badge badge-muted">проверка статуса…</div>
+  </header>
+
+  <main class="container">
+    <!-- Загрузка -->
+    <section id="uploadCard" class="card upload">
+      <div id="dropzone" class="dropzone">
+        <input type="file" id="fileInput" accept=".xlsx,.xlsm,.xls" hidden />
+        <div class="dz-inner">
+          <div class="dz-icon">⬆</div>
+          <p class="dz-title">Перетащите файл баланса хвостов (.xlsx) или нажмите для выбора</p>
+          <p class="dz-hint">Ожидается отчёт института по хвостам обогатительной фабрики</p>
+          <p id="fileName" class="file-name"></p>
+        </div>
+      </div>
+      <div class="goal-block">
+        <label for="goalInput" class="goal-label">Целевая задача и ограничения (необязательно)</label>
+        <textarea id="goalInput" class="goal-input" rows="2"
+          placeholder="Например: снизить потери Элемента 28 не менее чем на 10%; бюджет ограничен — без замены крупного оборудования; реагентный режим менять можно."></textarea>
+        <p class="goal-hint">Учитывается при генерации: гипотезы будут сфокусированы на вашей цели и не нарушат ограничения.</p>
+      </div>
+      <div class="upload-actions">
+        <button id="analyzeBtn" class="btn btn-primary" disabled>Анализировать</button>
+        <span class="examples-hint">Металлы анонимизированы: «Элемент 28» и «Элемент 29».</span>
+      </div>
+    </section>
+
+    <!-- База знаний -->
+    <section class="card kb">
+      <div class="kb-head">
+        <h2>База знаний</h2>
+        <span id="kbCount" class="count"></span>
+      </div>
+      <p class="kb-hint">Вшитый корпус: учебники по флотации, экспертные решения, методический гайд.
+      Добавьте свою литературу (статьи, патенты, отчёты) — она сразу участвует в поиске,
+      генерации гипотез и диалоге, с цитированием.</p>
+      <div id="kbList" class="kb-list"></div>
+      <div class="kb-meta">
+        <input id="kbAuthor" class="kb-meta-inp" type="text" placeholder="Авторы (необязательно)" />
+        <input id="kbYear" class="kb-meta-inp kb-meta-year" type="text" placeholder="Год" />
+        <input id="kbNote" class="kb-meta-inp kb-meta-note" type="text"
+               placeholder="Условия экспериментов / примечание (необязательно)" />
+      </div>
+      <div class="kb-actions">
+        <input type="file" id="kbInput" accept=".pdf,.docx,.txt,.md" multiple hidden />
+        <button id="kbAdd" class="btn btn-ghost">+ Добавить литературу (PDF / DOCX / TXT)</button>
+        <span id="kbStatus" class="kb-status"></span>
+      </div>
+    </section>
+
+    <!-- Загрузка/ошибки -->
+    <div id="loader" class="loader card hidden">
+      <div class="spinner"></div>
+      <div class="loader-txt">
+        <span id="loaderText">Анализ баланса…</span>
+        <span id="loaderElapsed" class="loader-elapsed"></span>
+      </div>
+    </div>
+    <div id="errorBox" class="error hidden"></div>
+
+    <!-- Результаты -->
+    <section id="results" class="results hidden">
+      <div class="card summary">
+        <div class="summary-head">
+          <h2 id="sumFile">—</h2>
+          <div class="export-group">
+            <button id="exportBtn" class="btn btn-ghost">JSON</button>
+            <button class="btn btn-ghost" data-export="docx">DOCX</button>
+            <button class="btn btn-ghost" data-export="pdf">PDF</button>
+            <button class="btn btn-ghost" data-export="csv">CSV</button>
+            <button class="btn btn-ghost" data-export="tasks" title="CSV для импорта задач в Jira / YouTrack">Jira/YouTrack</button>
+            <button class="btn btn-ghost" data-export="protocol" title="Протоколы лабораторной проверки гипотез (DOCX)">Протоколы</button>
+          </div>
+        </div>
+        <div id="sumMetrics" class="metrics"></div>
+        <div id="strategyBanner" class="strategy"></div>
+        <div id="goalEcho" class="goal-echo hidden"></div>
+        <div id="warnBox" class="warn-box hidden"></div>
+        <div id="lossChart" class="loss-chart hidden"></div>
+        <div id="lossBars" class="loss-bars"></div>
+      </div>
+
+      <div class="section-title">
+        <h2>Гипотезы</h2>
+        <span id="hypCount" class="count"></span>
+      </div>
+      <div id="hypList" class="hyp-list"></div>
+
+      <!-- Граф связей -->
+      <div id="graphBlock" class="hidden">
+        <div class="section-title">
+          <h2>Граф связей</h2>
+          <span class="count">поток → класс крупности → гипотеза · наведите на узел</span>
+        </div>
+        <section class="card">
+          <div id="linkGraph" class="link-graph"></div>
+        </section>
+      </div>
+
+      <!-- Диалог по результатам -->
+      <div class="section-title">
+        <h2>Обсуждение с системой</h2>
+        <span class="count">уточняйте и дорабатывайте гипотезы</span>
+      </div>
+      <section class="card chat">
+        <div id="chatLog" class="chat-log">
+          <div class="msg assistant">
+            <div class="bubble">Задайте вопрос по диагнозу или гипотезам: «почему H1 важнее H3?»,
+            «переформулируй H2 без роста расхода реагентов», «какие данные нужны, чтобы проверить H4?».
+            Ответы опираются на диагноз, профиль фабрики и литературу с цитатами.</div>
+          </div>
+        </div>
+        <div class="chat-input">
+          <textarea id="chatInput" rows="1" placeholder="Ваш вопрос или уточнение…"></textarea>
+          <button id="chatSend" class="btn btn-primary">Отправить</button>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <footer class="footer">Диагноз строится детерминированно по балансу; формулировки подтверждаются ссылками на литературу.</footer>
+
+  <script src="fx.js?v=11"></script>
+  <script src="app.js?v=11"></script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+# Локальная сборка и запуск. Для жюри см. docker-compose.deploy.yml (готовый образ, без build).
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${IMAGE:-hypofactory:latest}
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      # Без ключа сервис работает в базовом режиме (диагноз + RAG + шаблонные гипотезы).
+      YANDEX_API_KEY: ${YANDEX_API_KEY:-}
+      YANDEX_FOLDER_ID: ${YANDEX_FOLDER_ID:-}
+      LLM_MODEL_ID: ${LLM_MODEL_ID:-qwen3-235b-a22b-fp8}
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.2}
+      # Семантический слой RAG (вкл. по умолчанию; без ключа деградирует до BM25)
+      EMBEDDINGS_ENABLED: ${EMBEDDINGS_ENABLED:-true}
+      # Разграничение доступа: если задать, /api/* потребуют заголовок X-API-Key
+      APP_ACCESS_KEY: ${APP_ACCESS_KEY:-}
+      # Референсные цены металлов для экономической оценки, USD/т (0 = отключить)
+      METAL_PRICE_28_USD_T: ${METAL_PRICE_28_USD_T:-16500}
+      METAL_PRICE_29_USD_T: ${METAL_PRICE_29_USD_T:-9200}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health').getcode()==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

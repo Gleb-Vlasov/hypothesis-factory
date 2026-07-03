@@ -1,0 +1,6 @@
+# Опциональный семантический слой RAG (локальные эмбеддинги).
+# Ставить только для полностью офлайн-семантики (утяжеляет образ на ~несколько ГБ):
+#   pip install -r requirements-embed.txt
+# и выставить EMBEDDINGS_ENABLED=true, EMBEDDINGS_BACKEND=local.
+# В рантайме на прогоне жюри семантику лучше давать через эмбеддинги Yandex API.
+sentence-transformers==3.3.1

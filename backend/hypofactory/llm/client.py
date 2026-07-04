@@ -70,13 +70,15 @@ class LLMClient:
         """Расшифровка изображения (схема/регламент) vision-моделью того же провайдера.
 
         image_b64_jpeg — base64 JPEG (подготовка — ingestion/images.py).
-        Reasoning-модель: щедрый max_tokens, иначе весь бюджет уйдёт на размышления
-        и content вернётся пустым.
+        Vision-модель reasoning-класса: размышления выключаем (enable_thinking=False),
+        иначе ~каждый 4-й вызов тратит весь бюджет токенов на рассуждения и content
+        приходит пустым; заодно расшифровка ускоряется в ~5 раз. Если провайдер
+        не понимает параметр — повторяем без него со щедрым max_tokens.
         """
         if not self.available:
             raise RuntimeError("LLM недоступен: не задан YANDEX_API_KEY/FOLDER_ID.")
         client = self._ensure()
-        resp = client.chat.completions.create(
+        kwargs = dict(
             model=f"gpt://{self.s.yandex_folder_id}/{self.s.vision_model_id}/latest",
             temperature=0.2,
             max_tokens=self.s.vision_max_tokens,
@@ -87,8 +89,20 @@ class LLMClient:
                  "image_url": {"url": f"data:image/jpeg;base64,{image_b64_jpeg}"}},
             ]}],
         )
+        try:
+            resp = client.chat.completions.create(
+                extra_body={"chat_template_kwargs": {"enable_thinking": False}}, **kwargs)
+        except Exception:
+            resp = client.chat.completions.create(**kwargs)
         text = resp.choices[0].message.content or ""
-        return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+        text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+        if not text:
+            # редкий остаточный случай (finish_reason=length на размышлениях) — одна
+            # повторная попытка обычно решает
+            resp = client.chat.completions.create(**kwargs)
+            text = resp.choices[0].message.content or ""
+            text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+        return text
 
     def chat_json(self, system: str, user: str, **kw) -> object:
         """Запрашивает ответ и извлекает JSON (устойчиво к обёрткам ```json ...```)."""

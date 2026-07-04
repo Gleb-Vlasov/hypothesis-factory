@@ -14,6 +14,7 @@ import tempfile
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 
 from hypofactory.api.service import get_pipeline
 
@@ -77,8 +78,11 @@ async def analyze(file: UploadFile = File(...), goal: str = Form(""),
             it.write(idata)
             it.close()
             tmp_images.append((it.name, iname))
-        result = get_pipeline().analyze(tmp.name, goal=goal.strip()[:2000],
-                                        image_paths=tmp_images or None)
+        # анализ долгий (минуты) и блокирующий — уводим из event loop, чтобы
+        # несколько вкладок/пользователей анализировали параллельно
+        result = await run_in_threadpool(get_pipeline().analyze, tmp.name,
+                                         goal=goal.strip()[:2000],
+                                         image_paths=tmp_images or None)
         result["report"]["source_file"] = name
         return JSONResponse(result)
     except HTTPException:
@@ -152,7 +156,8 @@ async def knowledge_add(file: UploadFile = File(...), author: str = Form(""),
         tmp.write(data)
         tmp.close()
         meta = {"author": author[:200], "year": year[:20], "note": note[:500]}
-        return get_pipeline().add_knowledge(tmp.name, name, meta)
+        # расшифровка изображения/индексация могут занимать десятки секунд
+        return await run_in_threadpool(get_pipeline().add_knowledge, tmp.name, name, meta)
     except RuntimeError as e:
         # изображение без LLM-режима — временная недоступность, не ошибка данных
         raise HTTPException(status_code=503, detail=str(e))

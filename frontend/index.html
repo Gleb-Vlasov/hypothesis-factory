@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Фабрика гипотез</title>
-  <link rel="stylesheet" href="styles.css?v=11" />
+  <link rel="stylesheet" href="styles.css?v=12" />
 </head>
 <body>
   <!-- Инлайн-позиционирование дублирует CSS намеренно: фоновые слои не должны
@@ -36,6 +36,15 @@
           <p id="fileName" class="file-name"></p>
         </div>
       </div>
+      <div class="img-block">
+        <input type="file" id="imgInput" accept=".png,.jpg,.jpeg,.webp,.bmp" multiple hidden />
+        <div class="img-row">
+          <button id="imgAdd" class="btn btn-ghost">+ Схемы / регламенты (PNG, JPG)</button>
+          <span class="goal-hint img-hint">До 5 изображений: схема цепочки аппаратов, регламент, список
+          оборудования — расшифровываются моделью и учитываются в гипотезах.</span>
+        </div>
+        <div id="imgChips" class="img-chips"></div>
+      </div>
       <div class="goal-block">
         <label for="goalInput" class="goal-label">Целевая задача и ограничения (необязательно)</label>
         <textarea id="goalInput" class="goal-input" rows="2"
@@ -55,8 +64,9 @@
         <span id="kbCount" class="count"></span>
       </div>
       <p class="kb-hint">Вшитый корпус: учебники по флотации, экспертные решения, методический гайд.
-      Добавьте свою литературу (статьи, патенты, отчёты) — она сразу участвует в поиске,
-      генерации гипотез и диалоге, с цитированием.</p>
+      Добавьте свою литературу (статьи, патенты, отчёты) или изображения схем и регламентов —
+      документы индексируются, изображения расшифровываются моделью; всё сразу участвует
+      в поиске, генерации гипотез и диалоге, с цитированием.</p>
       <div id="kbList" class="kb-list"></div>
       <div class="kb-meta">
         <input id="kbAuthor" class="kb-meta-inp" type="text" placeholder="Авторы (необязательно)" />
@@ -65,8 +75,8 @@
                placeholder="Условия экспериментов / примечание (необязательно)" />
       </div>
       <div class="kb-actions">
-        <input type="file" id="kbInput" accept=".pdf,.docx,.txt,.md" multiple hidden />
-        <button id="kbAdd" class="btn btn-ghost">+ Добавить литературу (PDF / DOCX / TXT)</button>
+        <input type="file" id="kbInput" accept=".pdf,.docx,.txt,.md,.png,.jpg,.jpeg,.webp,.bmp" multiple hidden />
+        <button id="kbAdd" class="btn btn-ghost">+ Добавить литературу или схему (PDF / DOCX / TXT / PNG / JPG)</button>
         <span id="kbStatus" class="kb-status"></span>
       </div>
     </section>
@@ -99,6 +109,7 @@
         <div id="strategyBanner" class="strategy"></div>
         <div id="goalEcho" class="goal-echo hidden"></div>
         <div id="warnBox" class="warn-box hidden"></div>
+        <div id="imgTranscripts" class="img-transcripts hidden"></div>
         <div id="lossChart" class="loss-chart hidden"></div>
         <div id="lossBars" class="loss-bars"></div>
       </div>
@@ -143,7 +154,7 @@
 
   <footer class="footer">Диагноз строится детерминированно по балансу; формулировки подтверждаются ссылками на литературу.</footer>
 
-  <script src="fx.js?v=11"></script>
-  <script src="app.js?v=11"></script>
+  <script src="fx.js?v=12"></script>
+  <script src="app.js?v=12"></script>
 </body>
 </html>

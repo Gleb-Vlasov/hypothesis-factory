@@ -41,9 +41,16 @@ class Pipeline:
             pass  # файла ещё нет — нормально
 
     def add_knowledge(self, path: str, original_name: str, meta: Optional[dict] = None) -> dict:
-        """Парсит документ, добавляет фрагменты в индекс и сохраняет на диск."""
+        """Парсит документ (или расшифровывает изображение), добавляет в индекс."""
+        from hypofactory.ingestion.images import IMAGE_EXT, image_records, transcribe_image
         from hypofactory.ingestion.literature import parse_document
-        records = parse_document(path, original_name, meta)
+        preview = ""
+        if original_name.lower().endswith(IMAGE_EXT):
+            text = transcribe_image(self.llm, path, original_name)
+            records = image_records(text, original_name, meta)
+            preview = text[:500]
+        else:
+            records = parse_document(path, original_name, meta)
         if not records:
             raise ValueError("Не удалось извлечь текст (пустой документ или скан без текстового слоя).")
         added = self.retriever.add_records(records)
@@ -51,8 +58,11 @@ class Pipeline:
             with open(self._user_corpus_path, "a", encoding="utf-8") as f:
                 for r in records:
                     f.write(json.dumps(r, ensure_ascii=False) + "\n")
-        return {"source": original_name, "fragments": len(records), "added": added,
-                "corpus_size": len(self.retriever.records)}
+        out = {"source": original_name, "fragments": len(records), "added": added,
+               "corpus_size": len(self.retriever.records)}
+        if preview:
+            out["transcript_preview"] = preview
+        return out
 
     def knowledge_status(self) -> dict:
         """Состав базы знаний: вшитая часть + пользовательские документы."""
@@ -112,13 +122,54 @@ class Pipeline:
             pass
         return out
 
-    def analyze(self, path: str, goal: str = "") -> dict:
+    def _transcribe_images(self, image_paths: list[tuple[str, str]]) -> tuple[str, list[dict]]:
+        """Параллельная расшифровка приложенных схем: (общий контекст, метаданные).
+
+        Изображения независимы — расшифровываем одновременно, чтобы анализ
+        со схемами укладывался в тот же порядок времени, что и без них.
+        """
+        from concurrent.futures import ThreadPoolExecutor
+        from hypofactory.ingestion.images import transcribe_image
+
+        def _one(item: tuple[str, str]) -> dict:
+            path, name = item
+            try:
+                return {"name": name, "text": transcribe_image(self.llm, path, name)}
+            except Exception as e:
+                return {"name": name, "error": str(e)[:300]}
+
+        with ThreadPoolExecutor(max_workers=min(4, len(image_paths))) as pool:
+            results = list(pool.map(_one, image_paths))
+        blocks, meta = [], []
+        for r in results:
+            if r.get("text"):
+                blocks.append(f"=== {r['name']} ===\n{r['text']}")
+                meta.append({"name": r["name"], "transcript": r["text"]})
+            else:
+                meta.append({"name": r["name"], "error": r.get("error", "не расшифровано")})
+        return "\n\n".join(blocks), meta
+
+    def analyze(self, path: str, goal: str = "",
+                image_paths: Optional[list[tuple[str, str]]] = None) -> dict:
         from hypofactory.diagnosis.engine import MetalPrices
         report = parse_tailings_report(path)
         prices = MetalPrices(usd_per_t_28=self.s.metal_price_28_usd_t,
                              usd_per_t_29=self.s.metal_price_29_usd_t)
+        extra_context, images_meta = "", []
+        if image_paths:
+            if not self.llm.available:
+                report.warnings.append(
+                    "Приложенные изображения не учтены: расшифровка схем требует LLM-режима.")
+            else:
+                extra_context, images_meta = self._transcribe_images(image_paths)
+                for m in images_meta:
+                    if m.get("error"):
+                        report.warnings.append(f"Схема «{m['name']}» не расшифрована: {m['error']}")
         hset = generate_hypotheses(report, self.retriever, llm=self.llm, goal=goal,
-                                   feedback=self._load_feedback(), prices=prices)
+                                   feedback=self._load_feedback(), prices=prices,
+                                   extra_context=extra_context)
+        if images_meta:
+            hset.meta["images"] = images_meta
         if self.s.metal_price_28_usd_t or self.s.metal_price_29_usd_t:
             hset.meta["prices"] = {"Элемент 28": self.s.metal_price_28_usd_t,
                                    "Элемент 29": self.s.metal_price_29_usd_t,
@@ -156,8 +207,16 @@ class Pipeline:
                      "Вот наиболее релевантные вашему вопросу выдержки из литературы:\n\n" + ev_text)
             return {"reply": reply, "sources": sources, "mode": "template"}
 
+        facility = _load_facility_profile()
+        # схемы/регламенты, приложенные к текущему анализу, — тоже контекст диалога
+        img_ctx = "\n\n".join(
+            f"=== {m.get('name')} (расшифровка схемы) ===\n{m.get('transcript', '')}"
+            for m in ((analysis or {}).get("meta") or {}).get("images", [])
+            if m.get("transcript"))
+        if img_ctx:
+            facility = (facility + "\n\n" + img_ctx[:6000]).strip()
         system = chat_mod.build_system(chat_mod.build_digest(analysis or {}),
-                                       _load_facility_profile(), ev_text)
+                                       facility, ev_text)
         messages = chat_mod.trim_history(history)
         messages.append({"role": "user", "content": message[:4000]})
         try:

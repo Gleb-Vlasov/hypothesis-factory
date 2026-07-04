@@ -44,6 +44,12 @@ class Settings:
     llm_max_tokens: int = 4000
     llm_timeout: float = 120.0
 
+    # Vision-модель для расшифровки схем/регламентов (тот же эндпоинт и ключ).
+    # Reasoning-модель: бюджет токенов должен вмещать и рассуждения, и ответ.
+    vision_model_id: str = "qwen3.6-35b-a3b"
+    vision_max_tokens: int = 12000
+    vision_timeout: float = 180.0
+
     # Эмбеддинги (семантический слой RAG) — по умолчанию включены; при отсутствии
     # ключа Yandex или файлов индекса система сама деградирует до BM25
     embeddings_enabled: bool = True
@@ -77,6 +83,8 @@ class Settings:
             llm_fallback_model_id=os.environ.get("LLM_FALLBACK_MODEL_ID", cls.llm_fallback_model_id),
             llm_temperature=float(os.environ.get("LLM_TEMPERATURE", cls.llm_temperature)),
             llm_max_tokens=int(os.environ.get("LLM_MAX_TOKENS", cls.llm_max_tokens)),
+            vision_model_id=os.environ.get("VISION_MODEL_ID", cls.vision_model_id),
+            vision_max_tokens=int(os.environ.get("VISION_MAX_TOKENS", cls.vision_max_tokens)),
             embeddings_enabled=_b(os.environ.get("EMBEDDINGS_ENABLED"), True),
             embeddings_backend=os.environ.get("EMBEDDINGS_BACKEND", cls.embeddings_backend),
             local_embedding_model=os.environ.get("LOCAL_EMBEDDING_MODEL", cls.local_embedding_model),

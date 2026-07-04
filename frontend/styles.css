@@ -154,6 +154,36 @@ h1, h2, h3 { margin: 0; font-weight: 650; }
 .footer { text-align: center; color: var(--muted); font-size: 12.5px; padding: 24px; border-top: 1px solid var(--border); }
 @media (max-width: 640px){ .risks { grid-template-columns: 1fr; } .lossrow { grid-template-columns: 70px 1fr; } .lossrow .val { display:none; } }
 
+/* Приложенные схемы/регламенты (изображения) */
+.img-block { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+.img-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.img-hint { flex: 1; min-width: 220px; }
+.img-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.img-chips:empty { display: none; }
+.img-chip {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px;
+  padding: 4px 8px 4px 10px; border-radius: 999px; color: var(--text);
+  border: 1px solid var(--border); background: var(--bg);
+}
+.img-x {
+  border: 0; background: none; color: var(--muted); cursor: pointer;
+  font-size: 14px; line-height: 1; padding: 0 2px;
+}
+.img-x:hover { color: var(--text); }
+
+/* Расшифровки схем в результатах */
+.img-transcripts { margin-bottom: 16px; display: flex; flex-direction: column; gap: 8px; }
+.img-tr {
+  border: 1px solid var(--border); border-radius: 10px; background: var(--bg);
+  padding: 10px 14px; font-size: 13px;
+}
+.img-tr summary { cursor: pointer; color: var(--text); }
+.img-tr-hint { color: var(--muted); font-size: 12px; }
+.img-tr-text {
+  margin: 10px 0 2px; white-space: pre-wrap; color: var(--muted);
+  font-size: 12.5px; line-height: 1.55; max-height: 320px; overflow-y: auto;
+}
+
 /* Целевая задача / ограничения */
 .goal-block { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; }
 .goal-label { font-size: 13px; font-weight: 600; color: var(--text); }

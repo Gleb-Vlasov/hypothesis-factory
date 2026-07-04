@@ -22,8 +22,11 @@ window.fetch = async (url, opts = {}) => {
 const GRINDING = new Set(["liberation", "coarse_liberation"]);
 
 let selectedFile = null;
+let selectedImages = [];   // приложенные схемы/регламенты (до 5)
 let lastResult = null;
 let chatHistory = [];
+const MAX_IMAGES = 5;
+const IMG_RE = /\.(png|jpe?g|webp|bmp)$/i;
 
 const $ = (id) => document.getElementById(id);
 const fmt = (x, d = 0) => (x == null ? "—" : Number(x).toLocaleString("ru-RU", { maximumFractionDigits: d }));
@@ -61,7 +64,12 @@ dz.addEventListener("dragover", (e) => { e.preventDefault(); dz.classList.add("d
 dz.addEventListener("dragleave", () => dz.classList.remove("drag"));
 dz.addEventListener("drop", (e) => {
   e.preventDefault(); dz.classList.remove("drag");
-  if (e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]);
+  const files = [...e.dataTransfer.files];
+  // изображения, брошенные в основную зону, уходят в приложенные схемы
+  const imgs = files.filter((f) => IMG_RE.test(f.name));
+  if (imgs.length) addImages(imgs);
+  const xls = files.find((f) => !IMG_RE.test(f.name));
+  if (xls) setFile(xls);
 });
 input.addEventListener("change", () => { if (input.files.length) setFile(input.files[0]); });
 
@@ -69,6 +77,37 @@ function setFile(f) {
   selectedFile = f;
   $("fileName").textContent = f.name;
   $("analyzeBtn").disabled = false;
+}
+
+// ---------- Приложенные схемы/регламенты ----------
+$("imgAdd").addEventListener("click", () => $("imgInput").click());
+$("imgInput").addEventListener("change", () => {
+  addImages([...$("imgInput").files]);
+  $("imgInput").value = "";
+});
+
+function addImages(files) {
+  for (const f of files) {
+    if (!IMG_RE.test(f.name)) continue;
+    if (selectedImages.length >= MAX_IMAGES) break;
+    if (!selectedImages.some((x) => x.name === f.name && x.size === f.size)) selectedImages.push(f);
+  }
+  renderImgChips();
+}
+
+function renderImgChips() {
+  const box = $("imgChips");
+  box.innerHTML = "";
+  selectedImages.forEach((f, i) => {
+    const chip = document.createElement("span");
+    chip.className = "img-chip";
+    chip.innerHTML = `🖼 ${escapeHtml(f.name)} <button class="img-x" title="Убрать">×</button>`;
+    chip.querySelector(".img-x").addEventListener("click", () => {
+      selectedImages.splice(i, 1);
+      renderImgChips();
+    });
+    box.appendChild(chip);
+  });
 }
 
 // ---------- База знаний ----------
@@ -97,7 +136,9 @@ $("kbInput").addEventListener("change", async () => {
   $("kbInput").value = "";
   const st = $("kbStatus");
   for (const f of files) {
-    st.textContent = `Индексируется: ${f.name}…`;
+    st.textContent = IMG_RE.test(f.name)
+      ? `Расшифровывается схема: ${f.name}… (~15–40 с)`
+      : `Индексируется: ${f.name}…`;
     try {
       const fd = new FormData();
       fd.append("file", f);
@@ -113,7 +154,9 @@ $("kbInput").addEventListener("change", async () => {
       }
       const res = await r.json();
       st.textContent = res.added > 0
-        ? `Добавлено: ${f.name} (${res.fragments} фрагм.)`
+        ? (res.transcript_preview
+            ? `Схема расшифрована и добавлена: ${f.name} (${res.fragments} фрагм.)`
+            : `Добавлено: ${f.name} (${res.fragments} фрагм.)`)
         : `Уже в базе: ${f.name}`;
     } catch (e) {
       st.textContent = `Ошибка «${f.name}»: ${e.message}`;
@@ -151,14 +194,23 @@ const STAGES = [
   [6, "Ищу подтверждения в литературе (гибридный поиск)…"],
   [12, "Формулирую и обосновываю гипотезы…"],
 ];
+// со схемами добавляется этап расшифровки (идёт параллельно, ~15–40 с)
+const STAGES_IMG = [
+  [0, "Разбираю Excel-баланс…"],
+  [2, "Расшифровываю приложенные схемы и регламенты…"],
+  [40, "Считаю количественный диагноз по классам крупности…"],
+  [44, "Ищу подтверждения в литературе (гибридный поиск)…"],
+  [50, "Формулирую и обосновываю гипотезы…"],
+];
 let loaderTimer = null;
 
-function startLoader() {
+function startLoader(withImages = false) {
+  const stages = withImages ? STAGES_IMG : STAGES;
   const t0 = Date.now();
   const upd = () => {
     const sec = Math.floor((Date.now() - t0) / 1000);
-    let txt = STAGES[0][1];
-    for (const [at, label] of STAGES) if (sec >= at) txt = label;
+    let txt = stages[0][1];
+    for (const [at, label] of stages) if (sec >= at) txt = label;
     $("loaderText").textContent = txt;
     $("loaderElapsed").textContent = sec >= 15 ? `${sec} с` : "";
   };
@@ -177,12 +229,13 @@ async function analyze() {
   if (!selectedFile) return;
   $("errorBox").classList.add("hidden");
   $("results").classList.add("hidden");
-  startLoader();
+  startLoader(selectedImages.length > 0);
   try {
     const fd = new FormData();
     fd.append("file", selectedFile);
     const goal = ($("goalInput").value || "").trim();
     if (goal) fd.append("goal", goal);
+    for (const img of selectedImages) fd.append("images", img);
     const r = await fetch(`${API}/api/analyze`, { method: "POST", body: fd });
     if (!r.ok) {
       const err = await r.json().catch(() => ({ detail: r.statusText }));
@@ -461,6 +514,20 @@ function render(data) {
     wb.classList.remove("hidden");
   } else {
     wb.classList.add("hidden");
+  }
+
+  // Расшифровки приложенных схем/регламентов (учтены в генерации)
+  const imgs = ((data.meta || {}).images || []).filter((m) => m.transcript);
+  const it = $("imgTranscripts");
+  if (imgs.length) {
+    it.innerHTML = imgs.map((m) =>
+      `<details class="img-tr"><summary>🖼 Схема учтена: <b>${escapeHtml(m.name)}</b>` +
+      `<span class="img-tr-hint"> — расшифровка модели (клик, чтобы раскрыть)</span></summary>` +
+      `<pre class="img-tr-text">${escapeHtml(m.transcript)}</pre></details>`).join("");
+    it.classList.remove("hidden");
+  } else {
+    it.innerHTML = "";
+    it.classList.add("hidden");
   }
 
   // Диаграмма потерь по классам крупности

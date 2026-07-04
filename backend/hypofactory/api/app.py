@@ -44,25 +44,54 @@ def health():
 
 
 @app.post("/api/analyze")
-async def analyze(file: UploadFile = File(...), goal: str = Form("")):
+async def analyze(file: UploadFile = File(...), goal: str = Form(""),
+                  images: list[UploadFile] = File(default=[])):
+    """Анализ: Excel-баланс хвостов (обязателен) + до 5 изображений схем/регламентов
+    (опционально — расшифровываются vision-моделью и учитываются в гипотезах)."""
+    from hypofactory.ingestion.images import IMAGE_EXT, MAX_IMAGE_MB, MAX_IMAGES_PER_ANALYZE
     name = file.filename or "upload.xlsx"
     if not name.lower().endswith(ALLOWED_EXT):
         raise HTTPException(status_code=400, detail="Ожидается файл Excel (.xlsx) с балансом хвостов.")
     if name.lower().endswith(".xls"):
         raise HTTPException(status_code=400, detail="Старый формат .xls не поддерживается — "
                             "пересохраните файл как .xlsx (Excel: «Сохранить как» → «Книга Excel»).")
+    if len(images) > MAX_IMAGES_PER_ANALYZE:
+        raise HTTPException(status_code=400,
+                            detail=f"Не больше {MAX_IMAGES_PER_ANALYZE} изображений за один анализ.")
     data = await file.read()
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(name)[1])
+    tmp_images: list[tuple[str, str]] = []  # (путь, исходное имя)
     try:
         tmp.write(data)
         tmp.close()
-        result = get_pipeline().analyze(tmp.name, goal=goal.strip()[:2000])
+        for img in images:
+            iname = img.filename or "image.png"
+            if not iname.lower().endswith(IMAGE_EXT):
+                raise HTTPException(status_code=400,
+                                    detail=f"«{iname}»: изображения принимаются в PNG/JPG/WebP/BMP.")
+            idata = await img.read()
+            if len(idata) > MAX_IMAGE_MB * 1024 * 1024:
+                raise HTTPException(status_code=400,
+                                    detail=f"«{iname}»: изображение больше {MAX_IMAGE_MB} МБ.")
+            it = tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(iname)[1])
+            it.write(idata)
+            it.close()
+            tmp_images.append((it.name, iname))
+        result = get_pipeline().analyze(tmp.name, goal=goal.strip()[:2000],
+                                        image_paths=tmp_images or None)
         result["report"]["source_file"] = name
         return JSONResponse(result)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Не удалось обработать файл: {e}")
     finally:
         os.unlink(tmp.name)
+        for p, _ in tmp_images:
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
 
 
 @app.post("/api/export/{fmt}")
@@ -103,15 +132,18 @@ def knowledge_list():
 @app.post("/api/knowledge")
 async def knowledge_add(file: UploadFile = File(...), author: str = Form(""),
                         year: str = Form(""), note: str = Form("")):
-    """Добавление литературы (PDF/DOCX/TXT/MD) в базу знаний на лету.
+    """Добавление литературы (PDF/DOCX/TXT/MD) или изображения схемы/регламента
+    (PNG/JPG/WebP/BMP — расшифровывается vision-моделью) в базу знаний на лету.
 
     Необязательные метаданные: author (авторы), year (год), note (условия
     экспериментов/примечание) — попадают в цитирование.
     """
+    from hypofactory.ingestion.images import IMAGE_EXT
     from hypofactory.ingestion.literature import ALLOWED_EXT as KB_EXT, MAX_FILE_MB
     name = file.filename or "document"
-    if not name.lower().endswith(KB_EXT):
-        raise HTTPException(status_code=400, detail="Ожидается PDF, DOCX, TXT или MD.")
+    if not name.lower().endswith(KB_EXT + IMAGE_EXT):
+        raise HTTPException(status_code=400,
+                            detail="Ожидается PDF, DOCX, TXT, MD или изображение (PNG/JPG/WebP/BMP).")
     data = await file.read()
     if len(data) > MAX_FILE_MB * 1024 * 1024:
         raise HTTPException(status_code=400, detail=f"Файл больше {MAX_FILE_MB} МБ.")
@@ -121,6 +153,9 @@ async def knowledge_add(file: UploadFile = File(...), author: str = Form(""),
         tmp.close()
         meta = {"author": author[:200], "year": year[:20], "note": note[:500]}
         return get_pipeline().add_knowledge(tmp.name, name, meta)
+    except RuntimeError as e:
+        # изображение без LLM-режима — временная недоступность, не ошибка данных
+        raise HTTPException(status_code=503, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:

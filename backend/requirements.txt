@@ -9,6 +9,7 @@ python-multipart==0.0.20
 openpyxl==3.1.5
 pymupdf==1.25.1
 python-docx==1.1.2
+pillow==11.1.0
 
 # RAG (лексический слой — всегда офлайн)
 rank-bm25==0.2.2

@@ -354,7 +354,7 @@ def refine_hypothesis(llm, retriever: HybridRetriever, hypothesis: dict,
 def generate_hypotheses(report: TailingsReport, retriever: HybridRetriever,
                         llm=None, max_groups: int = 6, per_signal: int = 2,
                         goal: str = "", feedback: Optional[dict] = None,
-                        prices=None) -> HypothesisSet:
+                        prices=None, extra_context: str = "") -> HypothesisSet:
     diag = diagnose(report, prices=prices)
     groups = _group_signals(diag)[:max_groups]
     known_records = [r for r in retriever.records if r["type"] == "hypothesis"]
@@ -365,6 +365,12 @@ def generate_hypotheses(report: TailingsReport, retriever: HybridRetriever,
                          diagnosis=diag.to_dict())
     use_llm = bool(llm and getattr(llm, "available", False))
     facility = _load_facility_profile() if use_llm else ""
+    if use_llm and extra_context:
+        # расшифровки схем/регламентов, приложенных к этому анализу
+        facility = (facility + "\n\nДОКУМЕНТЫ ФАБРИКИ, ПРИЛОЖЕННЫЕ К АНАЛИЗУ "
+                    "(расшифровки схем/регламентов — используй их как приоритетный "
+                    "источник сведений об оборудовании и цепочке аппаратов):\n"
+                    + extra_context[:8000]).strip()
     rejected_text = "\n".join(f"- {r}" for r in (feedback or {}).get("rejected", [])[:10])
 
     def _one_group(g: SignalGroup) -> list[Hypothesis]:

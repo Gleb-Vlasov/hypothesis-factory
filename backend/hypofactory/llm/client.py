@@ -66,6 +66,30 @@ class LLMClient:
         # некоторые reasoning-модели оборачивают рассуждения в <think>…</think>
         return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
+    def describe_image(self, image_b64_jpeg: str, prompt: str) -> str:
+        """Расшифровка изображения (схема/регламент) vision-моделью того же провайдера.
+
+        image_b64_jpeg — base64 JPEG (подготовка — ingestion/images.py).
+        Reasoning-модель: щедрый max_tokens, иначе весь бюджет уйдёт на размышления
+        и content вернётся пустым.
+        """
+        if not self.available:
+            raise RuntimeError("LLM недоступен: не задан YANDEX_API_KEY/FOLDER_ID.")
+        client = self._ensure()
+        resp = client.chat.completions.create(
+            model=f"gpt://{self.s.yandex_folder_id}/{self.s.vision_model_id}/latest",
+            temperature=0.2,
+            max_tokens=self.s.vision_max_tokens,
+            timeout=self.s.vision_timeout,
+            messages=[{"role": "user", "content": [
+                {"type": "text", "text": prompt},
+                {"type": "image_url",
+                 "image_url": {"url": f"data:image/jpeg;base64,{image_b64_jpeg}"}},
+            ]}],
+        )
+        text = resp.choices[0].message.content or ""
+        return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+
     def chat_json(self, system: str, user: str, **kw) -> object:
         """Запрашивает ответ и извлекает JSON (устойчиво к обёрткам ```json ...```)."""
         raw = self.chat(system, user + "\n\nОтвет верни СТРОГО одним JSON без пояснений.", **kw)
